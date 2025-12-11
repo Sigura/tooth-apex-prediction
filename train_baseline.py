@@ -3,7 +3,7 @@ import os
 import catboost
 import pandas as pd
 import numpy as np
-import math
+#import math
 import random
 from tabulate import tabulate
 
@@ -33,9 +33,9 @@ seed = 42
 np.random.seed(seed)
 random.seed(seed)
 
-parts = 10
-val_parts = 1
-na = 0
+# parts = 10
+# val_parts = 1
+# na = 0
 
 def prediction_interval(y_true, y_pred, confidence_level=0.75):
     """
@@ -75,7 +75,7 @@ def prediction_interval(y_true, y_pred, confidence_level=0.75):
 def read_dataset(args, test_size=0.1):
     from sklearn.model_selection import train_test_split
 
-    x_train, x_val = None, None
+    #x_train, x_val = None, None
 
     df = pd.read_csv(args.data_file)
     if args.val_file is None:
@@ -142,7 +142,7 @@ def train(args, train_ds, val_ds, idx, axis):
             'features': features,
             'y_columns': y_columns,
             'iterations': args.iterations,
-            'mertics': {
+            'metrics': {
                 'RMSE': rmse,
                 'R2': r2,
             }

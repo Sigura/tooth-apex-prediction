@@ -3,7 +3,7 @@ import os
 import catboost
 import pandas as pd
 import numpy as np
-import math
+#import math
 import random
 from tabulate import tabulate
 
@@ -33,9 +33,9 @@ seed = 42
 np.random.seed(seed)
 random.seed(seed)
 
-parts = 10
-val_parts = 1
-na = 0
+# parts = 10
+# val_parts = 1
+# na = 0
 
 tooth_type_mapping = {
     1: {'upper': 'UR8', 'lower': 'LL8'},
@@ -111,7 +111,7 @@ def prediction_interval(y_true, y_pred, confidence_level=0.75):
 def read_dataset(args, test_size=0.1):
     from sklearn.model_selection import train_test_split
 
-    x_train, x_val = None, None
+    #x_train, x_val = None, None
     
 
     df = pd.read_csv(args.data_file)
@@ -180,7 +180,7 @@ def train(args, train_ds, val_ds, idx, axis):
             'features': features,
             'y_columns': y_columns,
             'iterations': args.iterations,
-            'mertics': {
+            'metrics': {
                 'RMSE': rmse,
                 'R2': r2,
             }
@@ -272,7 +272,7 @@ if __name__ == '__main__':
                    'LL8', 'LL7', 'LL6', 'LL5', 'LL4', 'LL3', 'LL2', 'LL1',
                    'LR1', 'LR2', 'LR3', 'LR4', 'LR5', 'LR6', 'LR7', 'LR8']
     
-    # 999 - if there is undefind tooth number in tooth_order order sort it to the end
+    # 999 - if there is an undefined tooth number in the tooth_order list, sort it to the end
     tooth_type_table_sorted = sorted(tooth_type_table, 
                                      key=lambda x: (tooth_order.index(x[0]) if x[0] in tooth_order else 999, 
                                                    axes_xyz.index(x[1])))
