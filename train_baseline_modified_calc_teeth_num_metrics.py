@@ -311,3 +311,56 @@ if __name__ == '__main__':
         final_tooth_table.append(['=>', 'e²', rmse_avg, r2_avg, pi_e2])
     
     print(tabulate(final_tooth_table, headers=['Tooth Type','axis', 'RMSE', 'R2', 'PI(75%)'], tablefmt='github'))
+
+    # Axis-Aggregated Performance Analysis (excluding third molars: idx 1 and 16)
+    print('\n== Table 2: Axis-Aggregated Performance Analysis')
+    axis_table = []
+    axis_names = {'x': 'X (mesio-distal)', 'y': 'Y (occluso-gingival)', 'z': 'Z (bucco-lingual)'}
+    for axis_idx, axis_name in enumerate(axes_xyz):
+        mask = (data[:, 0] > 1) & (data[:, 0] < 16) & (data[:, 4] == axis_idx)
+        axis_data = data[mask][:, [1, 2, 3]].astype(float)
+        axis_table.append([
+            axis_names[axis_name],
+            f'{axis_data[:, 0].mean():.4f} ± {axis_data[:, 0].std():.4f}',
+            f'{axis_data[:, 1].mean():.4f} ± {axis_data[:, 1].std():.4f}',
+            f'{axis_data[:, 2].mean():.4f} ± {axis_data[:, 2].std():.4f}'
+        ])
+    print(tabulate(axis_table, headers=['axis', 'RMSE (mean±std)', 'R² (mean±std)', 'PI(75%) (mean±std)'], tablefmt='github'))
+
+    # Performance by Functional Tooth Groups
+    print('\n== Table 3: Performance by Functional Tooth Groups')
+    functional_groups = {
+        'Incisors': [7, 8, 9, 10],
+        'Canines': [6, 11],
+        'Premolars': [4, 5, 12, 13],
+        'Molars': [3, 14],
+        'Third Molars': [1, 16]
+    }
+    functional_table = []
+    for group_name, indices in functional_groups.items():
+        mask = np.isin(data[:, 0].astype(int), indices)
+        group_data = data[mask][:, [1, 2, 3]].astype(float)
+        if len(group_data) > 0:
+            functional_table.append([
+                group_name,
+                f'{group_data[:, 0].mean():.4f} ± {group_data[:, 0].std():.4f}',
+                f'{group_data[:, 1].mean():.4f} ± {group_data[:, 1].std():.4f}',
+                f'{group_data[:, 2].mean():.4f} ± {group_data[:, 2].std():.4f}'
+            ])
+    print(tabulate(functional_table, headers=['Tooth Type', 'RMSE (mm)', 'R²', 'PI(75%)'], tablefmt='github'))
+
+    # Overall Model Performance (excluding third molars: idx 1 and 16)
+    print('\n== Table 1: Overall Model Performance (excluding third molars)')
+    mask = (data[:, 0] > 1) & (data[:, 0] < 16)
+    overall_data = data[mask][:, [1, 2, 3]].astype(float)
+    pi_x_overall = data[(data[:, 0] > 1) & (data[:, 0] < 16) & (data[:, 4] == 0)][:, 3].astype(float)
+    pi_y_overall = data[(data[:, 0] > 1) & (data[:, 0] < 16) & (data[:, 4] == 1)][:, 3].astype(float)
+    pi_z_overall = data[(data[:, 0] > 1) & (data[:, 0] < 16) & (data[:, 4] == 2)][:, 3].astype(float)
+    pi_euclidean = (pi_x_overall.mean()**2 + pi_y_overall.mean()**2 + pi_z_overall.mean()**2)**0.5
+    overall_table = [
+        ['RMSE', f'{overall_data[:, 0].mean():.4f} ± {overall_data[:, 0].std():.4f}'],
+        ['R²', f'{overall_data[:, 1].mean():.4f} ± {overall_data[:, 1].std():.4f}'],
+        ['PI(75%)', f'{overall_data[:, 2].mean():.4f} ± {overall_data[:, 2].std():.4f}'],
+        ['PI(75%) Euclidean', f'{pi_euclidean:.2f}']
+    ]
+    print(tabulate(overall_table, headers=['Metric', 'mean ± std'], tablefmt='github'))
