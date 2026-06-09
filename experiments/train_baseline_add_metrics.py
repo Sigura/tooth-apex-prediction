@@ -108,6 +108,27 @@ def prediction_interval(y_true, y_pred, confidence_level=0.75):
     return interval_radius
 
 
+
+def compute_mre(residuals_per_axis, norm_factor):
+    """
+    Compute Mean Radial Error from per-axis residuals.
+
+    Parameters:
+        residuals_per_axis: dict {0: array, 1: array, 2: array}
+        norm_factor: float — scaling factor to convert back to mm
+
+    Returns:
+        mre_mean, mre_std (in mm)
+    """
+    euclidean_distances = np.sqrt(
+        residuals_per_axis[0] ** 2 +
+        residuals_per_axis[1] ** 2 +
+        residuals_per_axis[2] ** 2
+    ) * norm_factor
+
+    return np.mean(euclidean_distances), np.std(euclidean_distances)
+
+
 def read_dataset(args, test_size=0.1):
     from sklearn.model_selection import train_test_split
 
@@ -142,6 +163,7 @@ def inference(y_val, pred):
     pi = prediction_interval(y_val, pred)
 
     return rmse, r2, pi
+
 
 
 def train(args, train_ds, val_ds, idx, axis):
@@ -216,8 +238,13 @@ def train(args, train_ds, val_ds, idx, axis):
                     pi_tooth * norm
                 ])
     
+   
+    residuals = np.array(y_val) - np.array(pred)
+    val_indices = np.array(y_val.index)
     
-    return [str(idx), axes_xyz[axis], rmse * norm, r2, pi*norm], tooth_type_metrics
+    
+    return [str(idx), axes_xyz[axis], rmse * norm, r2, pi*norm], tooth_type_metrics, residuals, val_indices, jaw_values, norm
+
 
 
 if __name__ == '__main__':
@@ -242,13 +269,36 @@ if __name__ == '__main__':
     
     tooth_type_table = []
 
+    
+    tooth_residuals = {}       # {idx: {axis: (residuals, val_indices, norm)}}
+    tooth_type_residuals = {}  # {tooth_type: {axis: (residuals, norm)}} for MRE by tooth type
+    
+
     for idx in range(1, 17):
+        
+        tooth_residuals[idx] = {}
+       
         for axis in range(0, 3):
 
-            row, tooth_metrics = train(args, train_ds, val_ds, idx, axis)
+           
+            row, tooth_metrics, residuals, val_indices, jaw_values, norm_factor = train(args, train_ds, val_ds, idx, axis)
+        
 
             table.append(row)
             tooth_type_table.extend(tooth_metrics)
+
+            
+            tooth_residuals[idx][axis] = (residuals, val_indices, norm_factor)
+
+            # residuals for MRE по tooth type 
+            for jaw_type in [0, 1]:
+                jaw_mask = jaw_values == jaw_type
+                if jaw_mask.sum() > 0:
+                    tt = get_tooth_type(idx, jaw_type)
+                    if tt not in tooth_type_residuals:
+                        tooth_type_residuals[tt] = {}
+                    tooth_type_residuals[tt][axis] = (residuals[jaw_mask], norm_factor)
+            
 
     
     data = np.asarray([[int(row[0]), row[2], row[3], row[4], axes_xyz.index(row[1])] for row in table])
@@ -264,13 +314,69 @@ if __name__ == '__main__':
 
     print('== Teeth acc (by idx)')
     print(tabulate(table, headers=['##','axis', 'RMSE', 'R2', 'PI(75%)'], tablefmt='github'))
-    
-    # calculate all metrics based on tooth type
-    print('\n== Teeth acc (by tooth type)')
+
+   
+    mre_table = []
+    for idx in range(1, 17):
+        if idx in tooth_residuals and len(tooth_residuals[idx]) == 3:
+            common = sorted(
+                set(tooth_residuals[idx][0][1]) &
+                set(tooth_residuals[idx][1][1]) &
+                set(tooth_residuals[idx][2][1])
+            )
+            if len(common) > 0:
+                axis_res = {}
+                for ax in range(3):
+                    res, indices, nf = tooth_residuals[idx][ax]
+                    mapping = dict(zip(indices, res))
+                    axis_res[ax] = np.array([mapping[i] for i in common])
+
+                mre_mean, mre_std = compute_mre(axis_res, nf)
+                mre_table.append([str(idx), mre_mean, mre_std, len(common)])
+
+    print('\n== MRE (Mean Radial Error) by tooth idx')
+    print(tabulate(
+        mre_table,
+        headers=['Tooth', 'MRE (mm)', 'STD (mm)', 'N'],
+        tablefmt='github',
+        floatfmt='.2f'
+    ))
+
+    mre_arr = np.array(mre_table)
+    mask = (mre_arr[:, 0].astype(int) > 1) & (mre_arr[:, 0].astype(int) < 16)
+    if mask.any():
+        filtered_mre = mre_arr[mask, 1].astype(float)
+        print(f"\nOverall MRE (excl. 3rd molars): {filtered_mre.mean():.2f} ± {filtered_mre.std():.2f} mm")
+   
     tooth_order = ['UR8', 'UR7', 'UR6', 'UR5', 'UR4', 'UR3', 'UR2', 'UR1',
                    'UL1', 'UL2', 'UL3', 'UL4', 'UL5', 'UL6', 'UL7', 'UL8',
                    'LL8', 'LL7', 'LL6', 'LL5', 'LL4', 'LL3', 'LL2', 'LL1',
                    'LR1', 'LR2', 'LR3', 'LR4', 'LR5', 'LR6', 'LR7', 'LR8']
+
+    mre_type_table = []
+    for tt in tooth_order:
+        if tt in tooth_type_residuals and len(tooth_type_residuals[tt]) == 3:
+            min_len = min(len(tooth_type_residuals[tt][ax][0]) for ax in range(3))
+            if min_len > 0:
+                axis_res = {}
+                for ax in range(3):
+                    axis_res[ax] = tooth_type_residuals[tt][ax][0][:min_len]
+                nf = tooth_type_residuals[tt][0][1]
+
+                mre_mean, mre_std = compute_mre(axis_res, nf)
+                mre_type_table.append([tt, mre_mean, mre_std, min_len])
+
+    print('\n== MRE (Mean Radial Error) by tooth type')
+    print(tabulate(
+        mre_type_table,
+        headers=['Tooth Type', 'MRE (mm)', 'STD (mm)', 'N'],
+        tablefmt='github',
+        floatfmt='.2f'
+    ))
+    
+    
+    # calculate all metrics based on tooth type
+    print('\n== Teeth acc (by tooth type)')
     
     # 999 - if there is undefind tooth number in tooth_order order sort it to the end
     tooth_type_table_sorted = sorted(tooth_type_table, 
