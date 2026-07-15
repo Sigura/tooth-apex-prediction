@@ -315,6 +315,19 @@ if __name__ == '__main__':
     print('== Teeth acc (by idx)')
     print(tabulate(table, headers=['##','axis', 'RMSE', 'R2', 'PI(75%)'], tablefmt='github'))
 
+
+    sel = data[(data[:, 0] > 1) & (data[:, 0] < 16)]
+    rmse_s, r2_s, pi_s = sel[:, [1, 2, 3]].std(axis=0, ddof=1)
+    rmsex_s, r2x_s, pix_s = sel[sel[:, 4] == 0][:, [1, 2, 3]].std(axis=0, ddof=1)
+    rmsey_s, r2y_s, piy_s = sel[sel[:, 4] == 1][:, [1, 2, 3]].std(axis=0, ddof=1)
+    rmsez_s, r2z_s, piz_s = sel[sel[:, 4] == 2][:, [1, 2, 3]].std(axis=0, ddof=1)
+
+    print('\n== mean ± std (ddof=1), excl. 3rd molars  [Table 2 / Table 3]')
+    print(f'x : RMSE {rmsex:.4f} ± {rmsex_s:.4f} | R2 {r2x:.4f} ± {r2x_s:.4f} | PI {pix:.4f} ± {pix_s:.4f}')
+    print(f'y : RMSE {rmsey:.4f} ± {rmsey_s:.4f} | R2 {r2y:.4f} ± {r2y_s:.4f} | PI {piy:.4f} ± {piy_s:.4f}')
+    print(f'z : RMSE {rmsez:.4f} ± {rmsez_s:.4f} | R2 {r2z:.4f} ± {r2z_s:.4f} | PI {piz:.4f} ± {piz_s:.4f}')
+    print(f'e²: RMSE {rmse:.4f} ± {rmse_s:.4f} | R2 {r2:.4f} ± {r2_s:.4f} | PI(eucl) {(pix**2 + piy**2 + piz**2)**0.5:.4f}')
+
    
     mre_table = []
     for idx in range(1, 17):
@@ -417,3 +430,39 @@ if __name__ == '__main__':
         final_tooth_table.append(['=>', 'e²', rmse_avg, r2_avg, pi_e2])
     
     print(tabulate(final_tooth_table, headers=['Tooth Type','axis', 'RMSE', 'R2', 'PI(75%)'], tablefmt='github'))
+
+
+    functional_groups = {
+        'Incisors':  ['UR1', 'UR2', 'UL1', 'UL2', 'LL1', 'LL2', 'LR1', 'LR2'],
+        'Canines':   ['UR3', 'UL3', 'LL3', 'LR3'],
+        'Premolars': ['UR4', 'UR5', 'UL4', 'UL5', 'LL4', 'LL5', 'LR4', 'LR5'],
+        'Molars':    ['UR6', 'UR7', 'UL6', 'UL7', 'LL6', 'LL7', 'LR6', 'LR7'],
+    }
+    mre_groups_idx = {
+        'Incisors':  [7, 8, 9, 10],
+        'Canines':   [6, 11],
+        'Premolars': [4, 5, 12, 13],
+        'Molars':    [2, 3, 14, 15],
+    }
+    mre_by_idx = {int(r[0]): float(r[1]) for r in mre_table}
+
+    group_table = []
+    for g, types in functional_groups.items():
+        sub = np.array([[r[2], r[3], r[4]] for r in tooth_type_table if r[0] in types], dtype=float)
+        m, s = sub.mean(axis=0), sub.std(axis=0, ddof=1)
+        mre_vals = np.array([mre_by_idx[i] for i in mre_groups_idx[g] if i in mre_by_idx], dtype=float)
+        mre_str = f'{mre_vals.mean():.2f} ± {mre_vals.std(ddof=1):.2f}' if len(mre_vals) > 1 else f'{mre_vals.mean():.2f}'
+        group_table.append([
+            g,
+            f'{m[0]:.4f} ± {s[0]:.4f}',
+            f'{m[1]:.4f} ± {s[1]:.4f}',
+            f'{m[2]:.4f} ± {s[2]:.4f}',
+            mre_str,
+        ])
+
+    print('\n== [Table 4] Functional tooth groups: mean ± std (ddof=1), excl. 3rd molars')
+    print(tabulate(
+        group_table,
+        headers=['Group', 'RMSE', 'R2', 'PI(75%)', 'MRE (mm)'],
+        tablefmt='github'
+    ))
